@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory Manager</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet"
+        integrity="sha384-9ndCyUaIbzAi2FUVXJi0CjmCapSmO7SnpJef0486qhLnuZ2cdeRhO02iuK6FUUVM" crossorigin="anonymous">
+</head>
+
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="/">Inventory Manager Admin Panel</a>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" aria-current="page" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link disabled" aria-current="page" href="/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" aria-current="page" href="/transactions">Transactions</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" aria-current="page" href="/report">Downloadable Report</a>
+                    </li>
+                </ul>
+                <!-- <form class="d-flex">
+                    <input class="form-control me-2" type="search" placeholder="Search" aria-label="Search">
+                    <button class="btn btn-outline-success" type="submit">Search</button>
+                </form> -->
+                <div class="d-flex">
+                    <button class="btn btn-primary me-3" name="add-item-btn" data-bs-toggle="modal"
+                        data-bs-target="#addItemModal">Add new Item</button>
+                    <a href="/logout"><button class="btn btn-danger me-3">Logout</button></a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="content">
+        {% with messages = get_flashed_messages() %}
+        {% if messages %}
+        {% for message in messages %}
+        <div class="row justify-content-center">
+            <div class="alert alert-primary alert-dismissable fade show mt-5 container col-6" role="alert">
+                <div class="row">
+                    <div class="col-8">
+                        {{message}}
+                    </div>
+
+                    <div class="text-end col-4">
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+
+        {% if items_by_category|length > 0 %}
+        {% for category in items_by_category %}
+        <div class="content bg-secondary align-items-center text-center p-1 m-5">
+            <h4 class="text-light">{{category['_id']}}</h4>
+        </div>
+        <div class="content align-items-center text-center m-5 d-flex flex-wrap justify-content-center">
+            {% for item in category['items'] %}
+            <div class="card bg-light mb-3 d-flex mx-3" style="width: 18rem;">
+                <div class="card-header">
+                    <!-- <h3 class="card-title">Store {{loop.index}}</h3> -->
+                    <img src="{{item['image']}}" class="card-img img-width" alt="Item Image"
+                        onerror="this.src = 'https://images.pexels.com/photos/1666067/pexels-photo-1666067.jpeg?auto=compress&cs=tinysrgb&w=1260&h=750&dpr=1'">
+                </div>
+                <div class="card-body">
+                    <h5 class="card-title">{{item['name']}}</h5>
+                    <h6 class="card-subtitle mb-2 text-muted">{{item['description']}}</h6>
+                    <!-- <p class="card-text"><strong>Price: </strong>${{item['price']}}</p> -->
+                    <p class="card-text"><strong>Quantity: </strong>{{item['quantity']}}</p>
+                    <p class="card-text"><strong>Status: </strong>{{item['status']}}</p>
+                    <p class="card-text"><strong>Status Updated: </strong>{{item['status_update_date']}}</p>
+                    <form method="post">
+                        <div class="row m-0 p-0">
+                            <input type="hidden" value="{{item['_id']}}" name="id">
+                            <input type="number" class="col-5 mx-2" name="quantity" placeholder="Amount">
+                            <button type="submit" class="btn btn-success col-6" name="adjust-stock">Adjust
+                                stock</button>
+                        </div>
+                    </form>
+                    <form method="post">
+                        <div class="row m-0 p-0 w-100">
+                            <input type="hidden" value="{{item['_id']}}" name="id">
+                            <button type="submit" class="btn btn-danger mt-1" name="change-status">Change
+                                Status</button>
+                        </div>
+                    </form>
+                    <div class="row m-0 p-0 w-100">
+                        <button type="submit" class="btn btn-primary mt-1" name="assign-user" data-bs-toggle="modal"
+                            data-bs-target="#assignUserModal{{item['_id']}}">Assign User</button>
+                    </div>
+
+                    <div class="modal fade" id="assignUserModal{{item['_id']}}" tabindex="-1" aria-labelledby="assignUserModalLabel{{item['_id']}}"
+                        aria-hidden="true">
+                        <div class="modal-dialog">
+                            <form method="post" onsubmit="return validateDatalistInput(this)">
+                                <div class="modal-content text-center">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title" id="assignUserModalLabel">Assign User: {{item['name']}}
+                                        </h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                            aria-label="Close"></button>
+                                    </div>
+                                    <div class="modal-body text-center">
+                                        <input type="hidden" value="{{item['_id']}}" name="item_id">
+                                        <input type="hidden" name="user_id" id="user_id">
+                                        <input class="form-control mb-2" type="text" name="name" for="name"
+                                            id="assign_name" placeholder="Name" list="names-id"
+                                            oninput="updateUserId(this.closest('form'))">
+
+                                        <input class="form-control mb-2" type="number" name="quantity" for="quantity"
+                                            id="quantity" placeholder="Quanity" autocomplete="off">
+
+                                        <input class="form-control mb-2" type="text" name="reason" for="reason"
+                                            id="reason" placeholder="Reason" autocomplete="off">
+
+                                        <datalist id="names-id">
+                                            {% for user in users %}
+                                            <option value="{{user['name']}}" data-id="{{user['_id']}}"></option>
+                                            {% endfor %}
+                                        </datalist>
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="submit" name="assign-user" class="btn btn-primary">Assign
+                                            User</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+        {% else %}
+        <h4>No items</h4>
+        {% endif %}
+    </div>
+
+    <div class="modal fade" id="addItemModal" tabindex="-1" aria-labelledby="addItemModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <form method="post">
+                <div class="modal-content text-center">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="addItemModalLabel">Add Item</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body text-center">
+                        <input class="form-control mb-2" type="text" name="name" for="name" id="name"
+                            placeholder="Name">
+                        <input class="form-control mb-2" type="text" name="description" for="description"
+                            id="description" placeholder="Description">
+                        <input class="form-control mb-2" type="number" name="quantity" for="quantity" id="quantity"
+                            placeholder="Quanity">
+                        <input class="form-control mb-2" type="text" name="category" for="category" id="category"
+                            placeholder="Category">
+                        <input class="form-control mb-2" type="text" name="image" for="image" id="image"
+                            placeholder="Link to image">
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" name="add-item" class="btn btn-primary">Add Item</button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function updateUserId(form) {
+            const input = form.querySelector('#assign_name');
+            const datalist = form.querySelector('#names-id');
+            const hiddenInput = form.querySelector('#user_id');
+            const options = datalist.options;
+            // console.log(input.value);
+            for (let i = 0; i < options.length; i++) {
+                if (input.value === options[i].value) {
+                    hiddenInput.value = options[i].getAttribute('data-id');
+                    return;
+                }
+            }
+            hiddenInput.value = ''; // Clear the hidden input if no match is found
+        }
+
+        function validateDatalistInput(form) {
+            const input = form.querySelector('#assign_name');
+            const datalist = form.querySelector('#names-id');
+            const options = datalist.options;
+            for (let i = 0; i < options.length; i++) {
+                if (input.value === options[i].value) {
+                    input.setCustomValidity('');
+                    return true;
+                }
+            }
+
+            input.setCustomValidity('Please select a valid name from the list.');
+            return false;
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"
+        integrity="sha384-fbbOQedDUMZZ5KreZpsbe1LCZPVmfTnH7ois6mU1QK+m14rQ1l2bGBq41eYeM/fS"
+        crossorigin="anonymous"></script>
+</body>
+
+</html>
