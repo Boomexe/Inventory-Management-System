@@ -8,6 +8,12 @@ from typing import Tuple, Dict, Any
 from dotenv import load_dotenv
 import os
 
+from pymongoarrow.monkey import patch_all
+patch_all()
+from pymongoarrow.api import Schema
+import pandas as pd
+import numpy as np
+
 load_dotenv()
 
 MONGO_URI = os.getenv('MONGO_URI')
@@ -26,6 +32,16 @@ client = pymongo.MongoClient(MONGO_URI)
 db = client.inventorymanager
 
 admin_register_security_key = 'secret'
+
+transactions_schema = Schema({
+    "_id": ObjectId,
+    "item_id": ObjectId,
+    "user_id": ObjectId,
+    "quantity": int,
+    "reason": str,
+    "date": str,
+    "type": str
+})
 
 def validate_user(request) -> Tuple[bool, Dict[str, Any]]:
     email = request.form['email']
@@ -69,7 +85,7 @@ def index():
                 if user is None:
                     doc = db.adminaccounts.insert_one(document)
                     
-                    session['id'] = str(doc['_id'])
+                    session['id'] = str(doc.inserted_id)
                     return redirect('/dashboard')
                 
                 else:
@@ -133,7 +149,10 @@ def dashboard():
             document['status'] = 'service'
             document['status_update_date'] = datetime.now().strftime('%Y-%m-%d')
 
-            db.items.insert_one(document)
+            item = db.items.insert_one(document)
+
+            db.transactions.insert_one({'item_id': item.inserted_id, 'user_id': ObjectId(session['id']), 'quantity': document['quantity'], 'reason': '', 'date': datetime.now().strftime('%Y-%m-%d'), 'type': 'add'})
+
             flash('Product added successfully')
         
         elif 'adjust-stock' in request.form:
@@ -193,7 +212,12 @@ def transactions():
         transactions_list = list(db.transactions.find().sort('date', pymongo.DESCENDING))
 
         for transaction in transactions_list:
-            transaction['user_name'] = db.users.find_one({'_id': transaction['user_id']})['name']
+            if transaction['type'] != 'add':
+                transaction['user_name'] = db.users.find_one({'_id': transaction['user_id']})['name']
+            
+            else:
+                transaction['user_name'] = db.adminaccounts.find_one({'_id': transaction['user_id']})['name']
+
             transaction['item_name'] = db.items.find_one({'_id': transaction['item_id']})['name']
 
         for transaction in transactions_list:
@@ -220,31 +244,37 @@ def reports():
     if 'id' not in session:
         flash('You must be logged in!')
         return redirect('/')
-    
-    items = list(db.items.find())
-    for item in items:
-        item['_id'] = str(item['_id'])
-    
-    transactions = list(db.transactions.find())
-    for transaction in transactions:
-        transaction['_id'] = str(transaction['_id'])
-        transaction['item_id'] = str(transaction['item_id'])
-        transaction['user_id'] = str(transaction['user_id'])
-    
-    users = list(db.users.find())
-    for user in users:
-        user['_id'] = str(user['_id'])
-        del user['password']
-        for assigned_item in user['assigned_items']:
-            assigned_item['item_id'] = str(assigned_item['item_id'])
-    
-    report = {
-        'inventory': items,
-        'transactions': transactions,
-        'users': users
-    }
 
-    return Response(json.dumps(report), mimetype='application/json')
+    transactions_df = db.transactions.find_pandas_all({}, schema=transactions_schema)
+    transactions_df.to_csv('static/transactions.csv', index=False)
+
+    return render_template('report.html')
+
+    
+    # items = list(db.items.find())
+    # for item in items:
+    #     item['_id'] = str(item['_id'])
+    
+    # transactions = list(db.transactions.find())
+    # for transaction in transactions:
+    #     transaction['_id'] = str(transaction['_id'])
+    #     transaction['item_id'] = str(transaction['item_id'])
+    #     transaction['user_id'] = str(transaction['user_id'])
+    
+    # users = list(db.users.find())
+    # for user in users:
+    #     user['_id'] = str(user['_id'])
+    #     del user['password']
+    #     for assigned_item in user['assigned_items']:
+    #         assigned_item['item_id'] = str(assigned_item['item_id'])
+    
+    # report = {
+    #     'inventory': items,
+    #     'transactions': transactions,
+    #     'users': users
+    # }
+
+    # return Response(json.dumps(report), mimetype='application/json')
 
 @app.route('/logout')
 def logout():
